@@ -1,0 +1,5 @@
+/viewers
+/viewers/<nick>
+/viewers/<nick>/<op>/{first,last} /* op is join/part/etc */
+/viewers/<nick>/isOp
+Bet

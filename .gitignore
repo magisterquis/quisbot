@@ -22,3 +22,10 @@ _testmain.go
 *.exe
 *.test
 *.prof
+
+quisbot
+quisbot.exe
+.*.swp
+quisbot.log.txt
+quisbot.db
+token

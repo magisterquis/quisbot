@@ -1,0 +1,13 @@
+Betting game
+        Web page
+        DB Connection
+!help
+document how to add commands
+!givecr
+!takecr
+bank account command
+!help rate-limiter
+Trap ctrl+c to close database
+Back up database every few minutes.
+a what field to logfirstlast
+
