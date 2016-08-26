@@ -9,6 +9,7 @@ package main
  */
 
 import (
+	"fmt"
 	"log"
 	"strings"
 )
@@ -38,7 +39,14 @@ func handlePrivmsg(nick, op, msg string) {
 	}
 
 	/* Log the first and latest privmsg time */
-	go LogFirstLast(nick, "PRIVMSG", replyto, msg)
+	go LogFirstLast(
+		nick,
+		"PRIVMSG",
+		replyto,
+		fmt.Sprintf("%v %v", replyto, msg),
+	)
+
+	log.Printf("[PRIVMSG] %v (reply-to %v): %v", nick, replyto, msg)
 
 	/* Handle commands */
 	/* TODO: Un-hardcode this */
@@ -53,5 +61,4 @@ func handlePrivmsg(nick, op, msg string) {
 		}
 	}
 
-	log.Printf("PRIVMSG from %v (reply-to %v): %v", nick, replyto, msg) /* DEBUG */
 }

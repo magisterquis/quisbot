@@ -18,10 +18,12 @@ const IGN = "magisterquis"
 /* Commands which return simple information */
 var simpleCommands = map[string]string{
 	"bethelp": "TODO: Finish this",
+	"ign":     fmt.Sprintf("His IGN is %v", IGN),
 }
 
 var commandFunctions = map[string]func(nick, replyto, args string) error{
-	"bet": PlaceBet,
+	"bet":     PlaceBet,
+	"balance": CheckBalance,
 }
 
 /* HandleCommand handles a command starting with a ! */
@@ -51,5 +53,4 @@ func HandleCommand(msg, nick, replyto string) error {
 	}
 
 	return nil
-
 }

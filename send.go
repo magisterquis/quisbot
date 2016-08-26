@@ -56,8 +56,11 @@ func Send(msg string) error {
 }
 
 /* Privmsg sends a private message to the target.  If the message is too long,
-it will be split up. */
-func Privmsg(target, message string) error {
+it will be split up.  Message may be a printf-like format string, filled in
+by args. */
+func Privmsg(target, message string, args ...interface{}) error {
+	/* Fill out the message */
+	message = fmt.Sprintf(message, args...)
 	/* Per-chunk leader */
 	cmd := fmt.Sprintf("PRIVMSG %v :", target)
 	if 510 <= len(cmd) {

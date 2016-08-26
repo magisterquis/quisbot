@@ -140,31 +140,46 @@ func IsChanOp(nick, channel string) (bool, error) {
 
 /* ChangeAccountBucket adds the value to the viewer's bank account.  The value
 may be negative, to decrease the amount the user has in the bank.  The bucket
-should be the viewer's bucket. */
-func ChangeAccountBucket(b *bolt.Bucket, amount int64) error {
-	var balance int64
-	var n int
+should be the viewer's bucket.  The viewer's current account balances is
+returned. */
+func ChangeAccountBalance(
+	b *bolt.Bucket,
+	amount int64,
+) (cur int64, err error) {
 	/* Get the current balance */
-	if v := b.Get(sb("credits")); nil != b {
-		balance, n = binary.Varint(v)
-		if 0 >= n {
-			log.Fatalf(
-				"Unable to decode account balance %q: %v",
-				v,
-				n,
-			)
-		}
-	}
+	balance := decodeBalance(b.Get(sb("credits")))
 	/* Add to it */
-	log.Printf("before: %v", balance) /* DEBUG */
-	balance += amount
-	log.Printf("after: %v", balance) /* DEBUG */
+	newbalance := balance + amount
 	/* Store it */
-	buf := make([]byte, MaxVarintLen64)
-	n = binary.PutVarint(buf, amount)
+	buf := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutVarint(buf, newbalance)
 	buf = buf[:n]
-	return b.Put(sb("credits"), buf)
+	return newbalance, b.Put(sb("credits"), buf)
+}
+
+/* GetAccountBalance gets the account balance for the viewer named nick */
+func GetAccountBalance(nick string) (int64, error) {
+	b, err := Get([][]byte{sb("viewers"), sb(nick)}, sb("credits"))
+	return decodeBalance(b), err
+}
+
+/* decodeBalance decodes the balance in b, or panics on error.  b may be nil,
+in which case 0 is returned. */
+func decodeBalance(b []byte) int64 {
+	if nil == b {
+		return 0
+	}
+	balance, n := binary.Varint(b)
+	if 0 >= n {
+		log.Panicf(
+			"Unable to decode account balance %q: %v",
+			b,
+			n,
+		)
+	}
+	return balance
 }
 
 /* TODO: Functions to get, set, and change credit balance */
-/* TODO: Split change into functions taking a nick and another taking a bucket */
+/* TODO: Split change into functions taking a nick and another taking a
+bucket */

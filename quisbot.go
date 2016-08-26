@@ -28,6 +28,12 @@ var (
 	DB               *bolt.DB
 )
 
+/* BOTS is the list of bots, i.e. nicks which shouldn't get things */
+var BOTS = map[string]struct{}{
+	"quisbot": struct{}{},
+	"moobot":  struct{}{},
+}
+
 func main() {
 	var (
 		user = flag.String(
@@ -54,6 +60,17 @@ func main() {
 			"db",
 			"./quisbot.db",
 			"Database `file`",
+		)
+		serveHTTP = flag.Bool(
+			"http",
+			false,
+			"Serve http (as opposed to fcgi), treating -s as "+
+				"a port",
+		)
+		addr = flag.String(
+			"a",
+			"/var/www/run/quisbot/quisbot.sock",
+			"Listening `socket` (or port with -http)",
 		)
 	)
 	flag.Usage = func() {
@@ -90,6 +107,13 @@ Options:
 
 	/* Trap Ctrl+C, etc, to close DB */
 	CatchInt()
+
+	/* Serve FCGI */
+	//go ServeFCGI(*addr, *serveHTTP) /* DEBUG */
+	_, _ = serveHTTP, addr /* DEBUG */
+
+	/* Start payroll watcher */
+	go Payroll()
 
 	/* Maintain a connection to twitch */
 	for {

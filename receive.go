@@ -99,3 +99,6 @@ func logLine(src, op, args string) error {
 	log.Printf("[PROTOCOL] %v from %v: %v", op, src, args)
 	return nil
 }
+
+/* TODO: Handle parts */
+//2016/08/24 05:33:47.026705 Unhandled line: :moobot!moobot@moobot.tmi.twitch.tv PART #magisterquis
