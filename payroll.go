@@ -22,8 +22,8 @@ const (
 	/* PAYRATE is the amount of credits to hand out every interval */
 	PAYRATE = 10
 	/* PAYINTERVAL is how often viewers get paid */
-	//PAYINTERVAL = 15 * time.Minute
-	PAYINTERVAL   = 10 * time.Second
+	PAYINTERVAL = 15 * time.Minute
+	//PAYINTERVAL   = 10 * time.Second
 	CURRENCYUNITS = "n"
 )
 
