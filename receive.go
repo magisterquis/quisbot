@@ -5,7 +5,7 @@ package main
  * Handle received messages
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160821
+ * Last Modified 20160826
  */
 
 import (
@@ -78,6 +78,8 @@ func handleLine(line string) error {
 		f = HandlePrivmsg
 	case "MODE":
 		f = HandleMode
+	case "PART":
+		f = HandlePart
 		/* TODO: Handle quits */
 	}
 
@@ -100,5 +102,5 @@ func logLine(src, op, args string) error {
 	return nil
 }
 
-/* TODO: Handle parts */
-//2016/08/24 05:33:47.026705 Unhandled line: :moobot!moobot@moobot.tmi.twitch.tv PART #magisterquis
+/* IsChannel returns true if c is a channel (i.e. starts with a "#") */
+func IsChannel(c string) bool { return strings.HasPrefix(c, "#") }

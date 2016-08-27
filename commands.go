@@ -5,7 +5,7 @@ package main
  * User-facing commands
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160821
+ * Last Modified 20160826
  */
 
 import (
@@ -38,7 +38,6 @@ func HandleCommand(msg, nick, replyto string) error {
 	if 2 == len(parts) {
 		args = strings.TrimSpace(parts[1])
 	}
-	_ = args /* DEBUG */
 
 	/* TODO: Help message */
 

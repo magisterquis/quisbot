@@ -5,7 +5,7 @@ package main
  * Database convenience functions
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160821
+ * Last Modified 20160826
  */
 
 import (
@@ -31,45 +31,45 @@ func CatchInt() {
 	}()
 }
 
-/* PutBool stores the v in k in b */
-func PutBool(b *bolt.Bucket, k []byte, v bool) error {
-	return b.Put(k, []byte{0x01})
+/* PutBool stores v in the key k in the bucket path bs, and returns the
+previous value, or nil if there was no previous value. */
+func PutBool(k []byte, v bool, bs ...[]byte) (*bool, error) {
+	var prev *bool
+	derr := DB.Update(func(tx *bolt.Tx) error {
+		bucket, err := GetBucket(tx, bs...)
+		if nil != err {
+			return err
+		}
+		/* Get previous value */
+		p := bucket.Get(k)
+		if nil != p {
+			b := byteBool(p)
+			prev = &b
+		}
+		/* Stick in the current value */
+		return bucket.Put(k, boolByte(v))
+	})
+	return prev, derr
 }
 
-/* GetBool gets the bool in k in b.  If the value wasn't found, ok will be
-false. */
-func GetBool(b *bolt.Bucket, k []byte) (value, ok bool, err error) {
-	/* Get the value from the database */
-	v := b.Get(k)
-	if nil == v {
-		/* Not in there */
-		return false, false, nil
+/* GetBool gets the bool in the key k in the bucket path bs.  It panics if v
+is not a proper bool.  It returns nil if there was no value stored. */
+func GetBool(k []byte, bs ...[]byte) (*bool, error) {
+	b, err := Get(k, bs...)
+	if nil != err {
+		return nil, err
 	}
-	/* Make sure it's what we expect */
-	if 1 != len(v) {
-		return false, false, fmt.Errorf(
-			"value was incorrect length (%v)",
-			len(v),
-		)
+	if nil == b {
+		return nil, nil
 	}
-	/* Booleanize it */
-	switch v[0] {
-	case 0x01:
-		return true, true, nil
-	case 0x00:
-		return false, true, nil
-	default:
-		return false, false, fmt.Errorf(
-			"value has unexpected value 0x(%02X)",
-			v[0],
-		)
-	}
+	pb := byteBool(b)
+	return &pb, nil
 }
 
 /* PutTx puts a value v under key k in the bucket path named in bs in the
 transaction Tx.  The buckets will be created if they do not exist. */
-func PutTx(tx *bolt.Tx, bs [][]byte, k, v []byte) error {
-	b, err := GetBucket(tx, bs)
+func PutTx(tx *bolt.Tx, k, v []byte, bs ...[]byte) error {
+	b, err := GetBucket(tx, bs...)
 	if nil != err {
 		return err
 	}
@@ -79,8 +79,8 @@ func PutTx(tx *bolt.Tx, bs [][]byte, k, v []byte) error {
 
 /* Get gets the value under key k stored in the buckets named in bs, which will
 be created if they do not exist, all in the transaction Tx. */
-func GetTx(tx *bolt.Tx, bs [][]byte, k []byte) ([]byte, error) {
-	b, err := GetBucket(tx, bs)
+func GetTx(tx *bolt.Tx, k []byte, bs ...[]byte) ([]byte, error) {
+	b, err := GetBucket(tx, bs...)
 	if nil != err {
 		return nil, err
 	}
@@ -89,20 +89,23 @@ func GetTx(tx *bolt.Tx, bs [][]byte, k []byte) ([]byte, error) {
 
 /* Put puts the value v in the key k in the buckets bs, which will be created
 if they do not exist. */
-func Put(bs [][]byte, k, v []byte) error {
+func Put(k, v []byte, bs ...[]byte) error {
 	return DB.Update(func(tx *bolt.Tx) error {
-		return PutTx(tx, bs, k, v)
+		return PutTx(tx, k, v, bs...)
 	})
 }
 
 /* Get gets the value under k in the buckets bs, which will be created if they
 do not exist. */
-func Get(bs [][]byte, k []byte) ([]byte, error) {
+func Get(k []byte, bs ...[]byte) ([]byte, error) {
 	var b []byte
 	derr := DB.Update(func(tx *bolt.Tx) error {
-		ib, err := GetTx(tx, bs, k)
+		ib, err := GetTx(tx, k, bs...)
 		if nil != err {
 			return err
+		}
+		if nil == ib {
+			return nil
 		}
 		b = make([]byte, len(ib))
 		copy(b, ib)
@@ -112,7 +115,7 @@ func Get(bs [][]byte, k []byte) ([]byte, error) {
 }
 
 /* GetBucket gets the bucket with bucket path bs */
-func GetBucket(tx *bolt.Tx, bs [][]byte) (*bolt.Bucket, error) {
+func GetBucket(tx *bolt.Tx, bs ...[]byte) (*bolt.Bucket, error) {
 	/* Make sure we actually have buckets */
 	if nil == bs || 0 == len(bs) {
 		return nil, fmt.Errorf("no buckets specified")
@@ -132,6 +135,31 @@ func GetBucket(tx *bolt.Tx, bs [][]byte) (*bolt.Bucket, error) {
 		}
 	}
 	return bucket, nil
+}
+
+/* byteBool turns a byte slice into a bool.  It panics if the byte slice
+contains anything besides a single 0 or 1. */
+func byteBool(b []byte) bool {
+	if 1 != len(b) {
+		log.Panicf("Improperly-sized bool []byte: %q", b)
+	}
+	if 0x00 == b[0] {
+		return false
+	}
+	if 0x01 == b[0] {
+		return true
+	}
+	log.Panicf("Improper bool []byte: %q", b)
+	/* Can't get here */
+	return false
+}
+
+/* boolByte returns a byte slice represeting b */
+func boolByte(b bool) []byte {
+	if b {
+		return []byte{0x01}
+	}
+	return []byte{0x00}
 }
 
 /* bs turns a string into a byte slice */

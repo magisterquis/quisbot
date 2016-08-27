@@ -5,7 +5,7 @@ package main
  * Twitch IRC bot
  * By MagisterQuis
  * Created 20160820
- * Last Modified 20160821
+ * Last Modified 20160826
  */
 
 import (

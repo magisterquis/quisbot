@@ -5,7 +5,7 @@ package main
  * Give active people credits
  * By MagisterQuis
  * Created 20160823
- * Last Modified 20160823
+ * Last Modified 20160826
  */
 
 import (
@@ -23,7 +23,7 @@ const (
 	PAYRATE = 10
 	/* PAYINTERVAL is how often viewers get paid */
 	PAYINTERVAL = 15 * time.Minute
-	//PAYINTERVAL   = 10 * time.Second
+	//PAYINTERVAL   = 10 * time.Second /* DEBUG */
 	CURRENCYUNITS = "n"
 )
 
@@ -130,18 +130,52 @@ func Pay(v string, b *bolt.Bucket, from, to []byte) (int64, string, error) {
 		return 0, "", fmt.Errorf("not enough said")
 	}
 
-	log.Printf("[PAYROLL] Paid %v to %v (%s)", PAYRATE, v, last)
+	log.Printf(
+		"[PAYROLL] Paid %v to %v, now %v (%s)",
+		PAYRATE,
+		v,
+		cur,
+		last,
+	)
 	return cur, parts[0], nil
 }
 
 /* CheckBalance sends a viewer's balance to him */
 func CheckBalance(nick, replyto, args string) error {
+	/* Work out whose balance to check */
+	tgt := nick
+	whose := "your"
+	if "" != args && IsChannel(replyto) {
+		op, err := IsChanOp(nick, replyto)
+		if nil != err {
+			return err
+		}
+		if op {
+			tgt = args
+			whose = tgt + "'s"
+		} else {
+			go Privmsg(
+				replyto,
+				"%v: You need ops to see someone else's "+
+					"balance.",
+				nick,
+			)
+			return fmt.Errorf(
+				"%v asked for %v's balance but doesn't have "+
+					"ops",
+				nick,
+				args,
+			)
+		}
+	}
+
 	/* Get viewer's balance */
-	b, err := GetAccountBalance(nick)
+	b, err := GetAccountBalance(tgt)
 	go Privmsg(
 		replyto,
-		"%v: your balance is %v%v",
+		"%v: %v balance is %v%v",
 		nick,
+		whose,
 		b,
 		CURRENCYUNITS,
 	)

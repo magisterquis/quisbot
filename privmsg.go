@@ -5,7 +5,7 @@ package main
  * Handle private messages
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160821
+ * Last Modified 20160826
  */
 
 import (
@@ -34,6 +34,7 @@ func handlePrivmsg(nick, op, msg string) {
 	var replyto string
 	if strings.HasPrefix(tgt, "#") {
 		replyto = tgt
+		go WelcomeUser(nick, tgt)
 	} else {
 		replyto = nick
 	}
@@ -42,7 +43,6 @@ func handlePrivmsg(nick, op, msg string) {
 	go LogFirstLast(
 		nick,
 		"PRIVMSG",
-		replyto,
 		fmt.Sprintf("%v %v", replyto, msg),
 	)
 
@@ -53,12 +53,12 @@ func handlePrivmsg(nick, op, msg string) {
 	if strings.HasPrefix(msg, "!") {
 		if err := HandleCommand(msg[1:], nick, replyto); nil != err {
 			log.Printf(
-				"Error handling command %q from %v in %q",
+				"Error handling command %q from %v in %q: %v",
 				msg,
 				nick,
 				replyto,
+				err,
 			)
 		}
 	}
-
 }

@@ -5,7 +5,7 @@ package main
  * Handle mode changes
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160821
+ * Last Modified 20160826
  */
 
 import (
@@ -27,7 +27,10 @@ func HandleMode(src, op, args string) error {
 
 	/* Take action for each nick changed */
 	for _, nick := range nicks {
-		go LogFirstLast(nick, op, ch, fmt.Sprintf(
+		/* Welcome user */
+		go WelcomeUser(nick, ch)
+		/* Log mode change */
+		go LogFirstLast(nick, op, fmt.Sprintf(
 			"%v by %v",
 			mode,
 			src,
