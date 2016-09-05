@@ -5,7 +5,7 @@ package main
  * Twitch IRC bot
  * By MagisterQuis
  * Created 20160820
- * Last Modified 20160826
+ * Last Modified 20160904
  */
 
 import (
@@ -54,7 +54,7 @@ func main() {
 		)
 		logFile = flag.String(
 			"l",
-			"quisbot.log.txt",
+			"quisbot.log",
 			"Name of `logfile`",
 		)
 		dbFile = flag.String(

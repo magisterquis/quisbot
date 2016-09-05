@@ -51,7 +51,19 @@ func PutBool(k []byte, v bool, bs ...[]byte) (*bool, error) {
 /* GetBool gets the bool in the key k in the bucket path bs.  It panics if v
 is not a proper bool.  It returns nil if there was no value stored. */
 func GetBool(k []byte, bs ...[]byte) *bool {
-	b := Get(k, bs...)
+	var b *bool
+	DB.Update(func(tx *bolt.Tx) error {
+		b = GetBoolTx(tx, k, bs...)
+		return nil
+	})
+	return b
+}
+
+/* GetBoolTx gets the bool in the key k in the bucket path bs in the
+transaction tx.  It panics on error and returns nil if there was no value
+stored. */
+func GetBoolTx(tx *bolt.Tx, k []byte, bs ...[]byte) *bool {
+	b := GetTx(tx, k, bs...)
 	if nil == b {
 		return nil
 	}

@@ -5,7 +5,7 @@ package main
  * Place a bet
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160827
+ * Last Modified 20160904
  */
 
 import (
@@ -13,6 +13,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -58,7 +59,6 @@ func PlaceBet(nick, replyto, args string) error {
 		go sendBetOpHelp(nick, replyto)
 	case "list":
 		go listEvents(nick, replyto)
-	/* TODO: Finish this */
 	default:
 		answered = false
 	}
@@ -78,8 +78,10 @@ func PlaceBet(nick, replyto, args string) error {
 	} else if strings.HasPrefix(args, "killbet") {
 		/* Remove a bet from the list */
 		go killBet(nick, replyto, args[7:])
+	} else if strings.HasPrefix(args, "yes") ||
+		strings.HasPrefix(args, "no") {
+		go noteHappened(nick, replyto, args)
 	} else {
-
 		go Privmsg(replyto, fmt.Sprintf(
 			"%v: I don't understand that.  Please try !bet help.",
 			nick,
@@ -95,7 +97,14 @@ func sendBetOpHelp(nick, replyto string) {
 	if WarnIfNotChanOp(nick, replyto) {
 		return
 	}
-	go Privmsg(replyto, fmt.Sprintf("%v: !bet {resettimer,killbet}", nick))
+	Privmsg(replyto, "%v: Op !bet help:", nick)
+	for _, h := range []string{
+		"resettimer <nick>",
+		"killbet <id>",
+		"yes|no <id>",
+	} {
+		Privmsg(replyto, fmt.Sprintf("!bet %v", h))
+	}
 }
 
 /* sendBetHelp sends the long help output to the requestor */
@@ -199,15 +208,11 @@ func addEvent(nick, replyto, bet, event, duration string) {
 			)
 		}
 
-		/* TODO: Have a way to reset this */
-
 		/* Get the bet bucket */
 		betBucket := GetBucket(tx, sb("bets"))
 		if nil != err {
 			panic(err.Error())
 		}
-
-		/* TODO: Log the bet has been placed */
 
 		/* Get the current state of the bets */
 		c := betBucket.Cursor()
@@ -296,7 +301,6 @@ func addEvent(nick, replyto, bet, event, duration string) {
 	)
 	/* Start timers to notify the channel that the betting and event are
 	over */
-	/* TODO: Implement the below */
 	betTimers[betID].bet = time.AfterFunc(
 		betEnd.Sub(now),
 		func() {
@@ -318,10 +322,6 @@ func addEvent(nick, replyto, bet, event, duration string) {
 		betEnd,
 		eventEnd,
 	)
-
-	//eventEnd := now.Add(betDuration)
-	//betEnd := now.Add(betDuration / 2)
-	/* TODO: Tell user it all worked */
 }
 
 /* addBetTx adds a bet of n to the event with the given id for the viewer with
@@ -447,14 +447,18 @@ func makeBet(nick, replyto, bet, way, id string) {
 /* betFinished is called when betting is closed for the bet betID.  It will let
 the channel (or whatever replyto is) know. */
 func betFinished(replyto string, betID byte) {
-	/* TODO: Implement this */
+	Privmsg(replyto, "Betting has closed for %v", betID)
+	log.Printf("[BET] Betting finished for %v", betID)
 	panic("implement this")
 }
 
 /* eventFinished is called when betting is closed for the bet betID.  It will
 let the channel (or whatever replyto is) know. */
 func eventFinished(replyto string, betID byte) {
-	/* TODO: Implement this */
+	Privmsg(replyto, "Bet %v has come due.  Did it happen?", betID)
+	log.Printf("[BET] Event finished for %v", betID)
+	/* TODO: implement yes/no for events */
+	/* TODO: Let ops say whether events happened */
 	panic("implement this")
 }
 
@@ -642,6 +646,7 @@ func killBet(nick, replyto, args string) {
 				message */
 				if bolt.ErrBucketNotFound == err {
 					err = fmt.Errorf(
+						/*TODO: Make less ugly */
 						"does not exist",
 					)
 				}
@@ -664,4 +669,137 @@ func killBet(nick, replyto, args string) {
 		}
 		return nil
 	})
+}
+
+/* noteHappened marks the betID contained in args (after "yes " or "no ") as
+having been completed or not.  Syntax is "yes|no <betID>". */
+func noteHappened(nick, replyto, args string) {
+	/* ChanOps only */
+	if WarnIfNotChanOp(nick, replyto) {
+		return
+	}
+
+	/* Split into parts */
+	parts := strings.SplitN(args, " ", 2)
+	if 1 > len(parts) {
+		panic(args)
+	}
+	if 2 != len(parts) {
+		Privmsg(
+			replyto,
+			"%v: I don't understand.  Maybe try !bet ophelp?",
+			nick,
+		)
+		return
+	}
+
+	/* Get the action */
+	var happened bool
+	switch parts[0] {
+	case "yes":
+		happened = true
+	case "no":
+		happened = false
+	default:
+		/* TODO: Less bad message */
+		Privmsg(
+			replyto,
+			"%v: %q doesn't make sense as a yes or no.",
+			nick,
+			parts[0],
+		)
+		return
+	}
+
+	/* Get the bet ID */
+	bint, err := strconv.ParseUint(parts[1], 0, 8)
+	if nil != err {
+		Privmsg(
+			replyto,
+			"%v: ID %q not understood",
+			nick,
+			parts[1],
+		)
+	}
+	bid := byte(bint)
+
+	var (
+		totlost    int64
+		bettorsRaw = map[string][]byte{}
+	)
+	DB.Update(func(tx *bolt.Tx) error {
+		/* Bet bucket */
+		b := GetBucket(tx, sb("bets"), []byte{bid})
+		/* Figure out who won and lost */
+		var win, lose *bolt.Bucket
+		bf := b.Bucket(sb("for"))
+		ba := b.Bucket(sb("against"))
+		if happened {
+			win, lose = bf, ba
+		} else {
+			win, lose = ba, bf
+		}
+		/* Total up the losing bet */
+		if nil != lose {
+			totlost = totBets(lose)
+		}
+		/* Copy off the bettors and their bets */
+		if nil != win {
+			win.ForEach(func(k, v []byte) error {
+				nick := make([]byte, len(k))
+				bvi := make([]byte, len(v))
+				copy(nick, k)
+				copy(bvi, v)
+				bettorsRaw[bs(nick)] = bvi
+				return nil
+			})
+		}
+		/* Delete bet bucket */
+		bb := GetBucket(tx, sb("bets"))
+		if err := bb.DeleteBucket([]byte{bid}); nil != err {
+			panic(err.Error())
+		}
+
+		return nil
+	})
+	log.Printf("[BET] %v noted %v as %q", nick, bid, parts[0])
+
+	/* Un-varint the winning bets */
+	var (
+		bettors = map[string]int64{}
+		totwon  int64
+	)
+	for k, v := range bettorsRaw {
+		b, n := binary.Varint(v)
+		if 0 >= n {
+			log.Panicf("Varint %q: %v", v, n)
+		}
+		bettors[k] = b
+		totwon += b
+	}
+
+	/* Each winning bet credit gets this many losing bet credits */
+	payout := float64((totwon + totlost) / totlost)
+
+	/* Adjust winners' money */
+	paid := map[string]int64{}
+	for k, v := range bettors {
+		paid[k] = int64(math.Ceil(float64(v) * payout))
+	}
+
+	/* Change their accounts as appropriate */
+	now := map[string]int64{}
+	DB.Update(func(tx *bolt.Tx) error {
+		for k, v := range paid {
+			now[k] = ChangeAccountBalanceTx(tx, k, v)
+		}
+		return nil
+	})
+
+	/* Note who won */
+	winners := fmt.Sprintf("%v concluded.  Winners:", bid)
+	for k, v := range now {
+		winners += fmt.Sprintf(" %v (%v)", k, v)
+	}
+	Privmsg(replyto, "%v", winners)
 }

@@ -5,7 +5,7 @@ package main
  * Register with the twitch server
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160821
+ * Last Modified 20160904
  */
 
 import (

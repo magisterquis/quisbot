@@ -5,7 +5,7 @@ package main
  * User-facing commands
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160826
+ * Last Modified 20160904
  */
 
 import (
@@ -17,13 +17,13 @@ const IGN = "magisterquis"
 
 /* Commands which return simple information */
 var simpleCommands = map[string]string{
-	"bethelp": "TODO: Finish this",
-	"ign":     fmt.Sprintf("His IGN is %v", IGN),
+	"ign": fmt.Sprintf("His IGN is %v", IGN),
 }
 
 var commandFunctions = map[string]func(nick, replyto, args string) error{
 	"bet":     PlaceBet,
 	"balance": CheckBalance,
+	/* TODO: !sh */
 }
 
 /* HandleCommand handles a command starting with a ! */
