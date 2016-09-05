@@ -58,13 +58,14 @@ func Send(msg string) error {
 /* Privmsg sends a private message to the target.  If the message is too long,
 it will be split up.  Message may be a printf-like format string, filled in
 by args. */
-func Privmsg(target, message string, args ...interface{}) error {
+func Privmsg(target, message string, args ...interface{}) {
 	/* Fill out the message */
 	message = fmt.Sprintf(message, args...)
 	/* Per-chunk leader */
 	cmd := fmt.Sprintf("PRIVMSG %v :", target)
 	if 510 <= len(cmd) {
-		return fmt.Errorf("Nick too long for command (>510): %v", cmd)
+		log.Printf("Nick too long for command (>510): %v", cmd)
+		return
 	}
 
 	/* Stream from which to read a long message */
@@ -72,33 +73,32 @@ func Privmsg(target, message string, args ...interface{}) error {
 
 	/* Buffer for message chunk */
 	buf := make([]byte, 510-len(cmd))
-	go func() {
-		/* Read and send until we have no buf left */
-		for 0 != stream.Len() {
-			buf = buf[:cap(buf)]
-			/* Read a chunk */
-			n, err := stream.Read(buf)
-			if 0 == n {
-				if nil != err && io.EOF != err {
-					log.Printf(
-						"Unable to read from buffer "+
-							"sending %v to %v: %v",
-						message,
-						target,
-						err,
-					)
-				}
-				return
+	/* Read and send until we have no buf left */
+	/* TODO: work out why this was in a goroutine */
+	for 0 != stream.Len() {
+		buf = buf[:cap(buf)]
+		/* Read a chunk */
+		n, err := stream.Read(buf)
+		if 0 == n {
+			if nil != err && io.EOF != err {
+				log.Printf(
+					"Unable to read from buffer "+
+						"sending %v to %v: %v",
+					message,
+					target,
+					err,
+				)
 			}
-			buf = buf[:n]
-			/* Send it */
-			if serr := Send(
-				cmd + string(buf),
-			); nil != serr {
-				log.Printf("Error sending %b: %v", buf, err)
-				return
-			}
+			return
 		}
-	}()
-	return nil
+		buf = buf[:n]
+		/* Send it */
+		if serr := Send(
+			cmd + string(buf),
+		); nil != serr {
+			log.Printf("Error sending %b: %v", buf, err)
+			return
+		}
+	}
+	return
 }

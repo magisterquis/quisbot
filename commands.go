@@ -43,7 +43,8 @@ func HandleCommand(msg, nick, replyto string) error {
 
 	/* Check the simple ones */
 	if info, ok := simpleCommands[cmd]; ok {
-		return Privmsg(replyto, fmt.Sprintf("%v: %v", nick, info))
+		go Privmsg(replyto, fmt.Sprintf("%v: %v", nick, info))
+		return nil
 	}
 
 	/* Check the functions */

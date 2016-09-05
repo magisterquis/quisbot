@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -105,6 +106,13 @@ Options:
 	}
 	log.Printf("Opened database in %v", DB.Path())
 
+	/* Read in token file */
+	token, err := ioutil.ReadFile(*tokenFile)
+	if nil != err {
+		log.Fatalf("Unable to read token from %v: %v", *tokenFile, err)
+	}
+	log.Printf("Read token from %v", *tokenFile)
+
 	/* Trap Ctrl+C, etc, to close DB */
 	CatchInt()
 
@@ -131,7 +139,7 @@ Options:
 		if err = Register(
 			ServerConnection,
 			*user,
-			*tokenFile,
+			token,
 			*channel,
 		); nil != err {
 			log.Printf("Unable to register: %v", err)

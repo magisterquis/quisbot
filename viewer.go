@@ -5,11 +5,12 @@ package main
  * DB routines handling viewers
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160826
+ * Last Modified 20160831
  */
 
 import (
 	"encoding/binary"
+	"fmt"
 	"log"
 	"time"
 
@@ -22,53 +23,35 @@ func LogFirstLast(nick, op, what string) {
 	/* Get the time as a gob */
 	now := []byte(time.Now().Format(time.RFC3339))
 	/* Stick it in the database */
-	if derr := DB.Update(func(tx *bolt.Tx) error {
+	DB.Update(func(tx *bolt.Tx) error {
 		/* Log the what and the last */
-		if err := PutTx(
+		PutTx(
 			tx,
 			sb("what"), sb(what),
 			sb("viewers"), sb(nick), sb(op),
-		); nil != err {
-			return err
-		}
-		if err := PutTx(
+		)
+		PutTx(
 			tx,
 			sb("last"), now,
 			sb("viewers"), sb(nick), sb(op),
-		); nil != err {
-			return err
-		}
+		)
 		/* See if we have the first one */
-		f, err := GetTx(
+		if nil != GetTx(
 			tx,
 			sb("first"),
 			sb("viewers"), sb(nick), sb(op),
-		)
-		if nil != err {
-			return err
-		}
-		/* We're done if we do */
-		if nil != f {
+		) {
+			/* We're done if we do */
 			return nil
 		}
 		/* If not, log it */
-		if err := PutTx(
+		PutTx(
 			tx,
 			sb("first"), now,
 			sb("viewers"), sb(nick), sb(op),
-		); nil != err {
-			return err
-		}
-		return nil
-	}); nil != derr {
-		log.Printf(
-			"Unable to log first/last %v for %v: %v",
-			nick,
-			op,
-			derr,
 		)
-	}
-
+		return nil
+	})
 	return
 }
 
@@ -85,20 +68,36 @@ func SetChanOp(nick, channel string, isOp bool) error {
 }
 
 /* IsChanOp returns whether the user is known to be a channel operator */
-func IsChanOp(nick, channel string) (bool, error) {
+func IsChanOp(nick, channel string) bool {
 	var is bool
-	b, err := GetBool(sb(channel), sb("viewers"), sb(nick), sb("chanop"))
+	b := GetBool(sb(channel), sb("viewers"), sb(nick), sb("chanop"))
 	if nil != b {
 		is = *b
 	}
-	return is, err
+	return is
 }
 
-/* ChangeAccountBucket adds the value to the viewer's bank account.  The value
-may be negative, to decrease the amount the user has in the bank.  The bucket
-should be the viewer's bucket.  The viewer's current account balances is
+/* ChangeAccountBalanceTx changes the viewer's bank account balance in the
+transaction Tx and returns the new balance. */
+func ChangeAccountBalanceTx(tx *bolt.Tx, nick string, amount int64) int64 {
+	/* Change the account balance */
+	bal, err := ChangeAccountBalanceBucket(
+		GetBucket(tx, sb("viewers"), sb(nick)),
+		amount,
+	)
+	if nil != err {
+		panic(err.Error())
+	}
+	return bal
+}
+
+/* TODO: Make sure nick, globally, is small enough */
+
+/* ChangeAccountBalanceBucket adds the value to the viewer's bank account.  The
+value may be negative, to decrease the amount the user has in the bank.  The
+bucket should be the viewer's bucket.  The viewer's current account balances is
 returned. */
-func ChangeAccountBalance(
+func ChangeAccountBalanceBucket(
 	b *bolt.Bucket,
 	amount int64,
 ) (cur int64, err error) {
@@ -114,9 +113,21 @@ func ChangeAccountBalance(
 }
 
 /* GetAccountBalance gets the account balance for the viewer named nick */
-func GetAccountBalance(nick string) (int64, error) {
-	b, err := Get(sb("credits"), sb("viewers"), sb(nick))
-	return decodeBalance(b), err
+func GetAccountBalance(nick string) int64 {
+	var bal int64
+	DB.Update(func(tx *bolt.Tx) error {
+		bal = GetAccountBalanceTx(tx, nick)
+		return nil
+	})
+	return bal
+}
+
+/* GetAccountBalanceTx gets the account balacne for the viewer in the
+transaction tx. */
+func GetAccountBalanceTx(tx *bolt.Tx, nick string) int64 {
+	return decodeBalance(
+		GetTx(tx, sb("credits"), sb("viewers"), sb(nick)),
+	)
 }
 
 /* decodeBalance decodes the balance in b, or panics on error.  b may be nil,
@@ -136,6 +147,37 @@ func decodeBalance(b []byte) int64 {
 	return balance
 }
 
-/* TODO: Functions to get, set, and change credit balance */
-/* TODO: Split change into functions taking a nick and another taking a
-bucket */
+/* nextEventAllowedTx returns the next time this viewer's allowed to make a
+new event.  If the viewer hasn't bet before, a zero time.Time is returned. */
+func NextEventAllowedTx(tx *bolt.Tx, nick string) time.Time {
+	/* Get the time as an RFC3339 string */
+	timestamp := GetTx(tx, sb("nextbet"), sb("viewers"), sb(nick))
+	if nil == timestamp {
+		/* Viewer hasn't bet before */
+		return time.Time{}
+	}
+	/* Parse the time */
+	t, err := time.Parse(time.RFC3339, string(timestamp))
+	if nil != err {
+		panic(err.Error())
+	}
+	return t
+}
+
+/* SetNextEventAllowedTx sets the time the viewer may make another event. */
+func SetNextEventAllowedTx(tx *bolt.Tx, nick string, next time.Time) {
+	PutTx(tx, sb("nextbet"), sb(next.Format(time.RFC3339)), sb("viewers"), sb(nick))
+}
+
+/* WarnIfNotChanOp sends the user a warning if ch is a channel and the user's
+not an op in that channel.  It returns true if a warning was sent */
+func WarnIfNotChanOp(nick, ch string) bool {
+	if IsChannel(ch) && !IsChanOp(nick, ch) {
+		go Privmsg(
+			ch,
+			fmt.Sprintf("%v: Hey, you're not an op.", nick),
+		)
+		return true
+	}
+	return false
+}

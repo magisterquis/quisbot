@@ -37,9 +37,7 @@ func HandleJoin(nick, op, channel string) error {
 
 	/* Hail users */
 	if _, ok := hails[nick]; ok {
-		if err := Privmsg(channel, "All hail "+nick+"!"); nil != err {
-			return err
-		}
+		go Privmsg(channel, "All hail "+nick+"!")
 	}
 
 	log.Printf("[JOIN] %v in %v", nick, channel)

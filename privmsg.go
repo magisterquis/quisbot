@@ -5,7 +5,7 @@ package main
  * Handle private messages
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160826
+ * Last Modified 20160831
  */
 
 import (
@@ -14,7 +14,8 @@ import (
 	"strings"
 )
 
-/* HandlePrivmsg is called to handle a private message */
+/* HandlePrivmsg is called to handle a private message in a goroutine it
+spawns */
 func HandlePrivmsg(nick, op, msg string) error {
 	go handlePrivmsg(nick, op, msg)
 	return nil

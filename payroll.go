@@ -24,7 +24,7 @@ const (
 	/* PAYINTERVAL is how often viewers get paid */
 	PAYINTERVAL = 15 * time.Minute
 	//PAYINTERVAL   = 10 * time.Second /* DEBUG */
-	CURRENCYUNITS = "n"
+	CURRENCYUNITS = "N"
 )
 
 /* Payroll gives active people credits every hour */
@@ -116,7 +116,7 @@ func Pay(v string, b *bolt.Bucket, from, to []byte) (int64, string, error) {
 		return 0, "", nil
 	}
 	/* Increase the bank account by the proper number of credits */
-	cur, err := ChangeAccountBalance(b, PAYRATE)
+	cur, err := ChangeAccountBalanceBucket(b, PAYRATE)
 	if nil != err {
 		return 0, "", err
 	}
@@ -146,11 +146,7 @@ func CheckBalance(nick, replyto, args string) error {
 	tgt := nick
 	whose := "your"
 	if "" != args && IsChannel(replyto) {
-		op, err := IsChanOp(nick, replyto)
-		if nil != err {
-			return err
-		}
-		if op {
+		if IsChanOp(nick, replyto) {
 			tgt = args
 			whose = tgt + "'s"
 		} else {
@@ -170,14 +166,14 @@ func CheckBalance(nick, replyto, args string) error {
 	}
 
 	/* Get viewer's balance */
-	b, err := GetAccountBalance(tgt)
+	b := GetAccountBalance(tgt)
 	go Privmsg(
 		replyto,
 		"%v: %v balance is %v%v",
 		nick,
 		whose,
-		b,
 		CURRENCYUNITS,
+		b,
 	)
-	return err
+	return nil
 }

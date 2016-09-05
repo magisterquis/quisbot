@@ -5,11 +5,10 @@ package main
  * Database convenience functions
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160826
+ * Last Modified 20160827
  */
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -36,10 +35,7 @@ previous value, or nil if there was no previous value. */
 func PutBool(k []byte, v bool, bs ...[]byte) (*bool, error) {
 	var prev *bool
 	derr := DB.Update(func(tx *bolt.Tx) error {
-		bucket, err := GetBucket(tx, bs...)
-		if nil != err {
-			return err
-		}
+		bucket := GetBucket(tx, bs...)
 		/* Get previous value */
 		p := bucket.Get(k)
 		if nil != p {
@@ -54,56 +50,45 @@ func PutBool(k []byte, v bool, bs ...[]byte) (*bool, error) {
 
 /* GetBool gets the bool in the key k in the bucket path bs.  It panics if v
 is not a proper bool.  It returns nil if there was no value stored. */
-func GetBool(k []byte, bs ...[]byte) (*bool, error) {
-	b, err := Get(k, bs...)
-	if nil != err {
-		return nil, err
-	}
+func GetBool(k []byte, bs ...[]byte) *bool {
+	b := Get(k, bs...)
 	if nil == b {
-		return nil, nil
+		return nil
 	}
 	pb := byteBool(b)
-	return &pb, nil
+	return &pb
 }
 
 /* PutTx puts a value v under key k in the bucket path named in bs in the
 transaction Tx.  The buckets will be created if they do not exist. */
-func PutTx(tx *bolt.Tx, k, v []byte, bs ...[]byte) error {
-	b, err := GetBucket(tx, bs...)
-	if nil != err {
-		return err
+func PutTx(tx *bolt.Tx, k, v []byte, bs ...[]byte) {
+	if err := GetBucket(tx, bs...).Put(k, v); nil != err {
+		panic(err.Error())
 	}
-	return b.Put(k, v)
 
 }
 
 /* Get gets the value under key k stored in the buckets named in bs, which will
 be created if they do not exist, all in the transaction Tx. */
-func GetTx(tx *bolt.Tx, k []byte, bs ...[]byte) ([]byte, error) {
-	b, err := GetBucket(tx, bs...)
-	if nil != err {
-		return nil, err
-	}
-	return b.Get(k), nil
+func GetTx(tx *bolt.Tx, k []byte, bs ...[]byte) []byte {
+	return GetBucket(tx, bs...).Get(k)
 }
 
 /* Put puts the value v in the key k in the buckets bs, which will be created
 if they do not exist. */
-func Put(k, v []byte, bs ...[]byte) error {
-	return DB.Update(func(tx *bolt.Tx) error {
-		return PutTx(tx, k, v, bs...)
+func Put(k, v []byte, bs ...[]byte) {
+	DB.Update(func(tx *bolt.Tx) error {
+		PutTx(tx, k, v, bs...)
+		return nil
 	})
 }
 
 /* Get gets the value under k in the buckets bs, which will be created if they
 do not exist. */
-func Get(k []byte, bs ...[]byte) ([]byte, error) {
+func Get(k []byte, bs ...[]byte) []byte {
 	var b []byte
-	derr := DB.Update(func(tx *bolt.Tx) error {
-		ib, err := GetTx(tx, k, bs...)
-		if nil != err {
-			return err
-		}
+	DB.Update(func(tx *bolt.Tx) error {
+		ib := GetTx(tx, k, bs...)
 		if nil == ib {
 			return nil
 		}
@@ -111,30 +96,34 @@ func Get(k []byte, bs ...[]byte) ([]byte, error) {
 		copy(b, ib)
 		return nil
 	})
-	return b, derr
+	return b
 }
 
-/* GetBucket gets the bucket with bucket path bs */
-func GetBucket(tx *bolt.Tx, bs ...[]byte) (*bolt.Bucket, error) {
+/* GetBucket gets the bucket with bucket path bs.  Buckets will be created if
+they don't exist. */
+func GetBucket(tx *bolt.Tx, bs ...[]byte) *bolt.Bucket {
 	/* Make sure we actually have buckets */
-	if nil == bs || 0 == len(bs) {
-		return nil, fmt.Errorf("no buckets specified")
+	if nil == bs {
+		panic("no bucket specified")
+	}
+	if 0 == len(bs) {
+		panic("empty bucket path specified")
 	}
 
 	/* Get the initial bucket */
 	bucket, err := tx.CreateBucketIfNotExists(bs[0])
 	if nil != err {
-		return nil, err
+		panic(err.Error())
 	}
 
 	/* Get subsequent buckets */
 	for _, b := range bs[1:] {
 		bucket, err = bucket.CreateBucketIfNotExists(b)
 		if nil != err {
-			return nil, err
+			panic(err.Error())
 		}
 	}
-	return bucket, nil
+	return bucket
 }
 
 /* byteBool turns a byte slice into a bool.  It panics if the byte slice

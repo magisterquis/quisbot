@@ -5,7 +5,7 @@ package main
  * Handle received messages
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160826
+ * Last Modified 20160830
  */
 
 import (
@@ -41,7 +41,6 @@ func HandleRX() error {
 			return err
 		}
 	}
-	return nil
 }
 
 /* handleLine handles individual lines */

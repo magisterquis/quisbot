@@ -5,7 +5,7 @@ package main
  * Welcome the user to the channel
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160826
+ * Last Modified 20160831
  */
 
 import "log"
@@ -25,7 +25,7 @@ func WelcomeUser(nick, channel string) {
 	seen, err := PutBool(sb("welcomed"), true, sb("viewers"), sb(nick))
 	if nil != err {
 		log.Printf(
-			"Unable to note welcome of %v in %v",
+			"Unable to note welcome of %v in %v: %v",
 			nick,
 			channel,
 			err,
@@ -36,14 +36,7 @@ func WelcomeUser(nick, channel string) {
 		return
 	}
 	/* If not, welcome the user */
-	if err := Privmsg(channel, WELCOMETEXT, nick); nil != err {
-		log.Printf(
-			"Unable to welcome %v to %v: %v",
-			nick,
-			channel,
-			err,
-		)
-	}
+	go Privmsg(channel, WELCOMETEXT, nick)
 	log.Printf("[WELCOME] %v (%v)", nick, channel)
 	return
 }

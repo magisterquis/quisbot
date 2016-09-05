@@ -11,19 +11,18 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"strings"
 )
 
 /* Register registers, and joins the channel */
-func Register(c io.Writer, username, tokenFile, channel string) error {
+func Register(
+	c io.Writer,
+	username string,
+	token []byte,
+	channel string,
+) error {
 	/* Slurp token file */
-	token, err := ioutil.ReadFile(tokenFile)
-	if nil != err {
-		return err
-	}
-	log.Printf("Read token from %v", tokenFile)
 
 	/* Auth */
 	a := fmt.Sprintf(
