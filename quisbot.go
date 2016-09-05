@@ -62,17 +62,6 @@ func main() {
 			"./quisbot.db",
 			"Database `file`",
 		)
-		serveHTTP = flag.Bool(
-			"http",
-			false,
-			"Serve http (as opposed to fcgi), treating -s as "+
-				"a port",
-		)
-		addr = flag.String(
-			"a",
-			"/var/www/run/quisbot/quisbot.sock",
-			"Listening `socket` (or port with -http)",
-		)
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(
@@ -115,10 +104,6 @@ Options:
 
 	/* Trap Ctrl+C, etc, to close DB */
 	CatchInt()
-
-	/* Serve FCGI */
-	//go ServeFCGI(*addr, *serveHTTP) /* DEBUG */
-	_, _ = serveHTTP, addr /* DEBUG */
 
 	/* Start payroll watcher */
 	go Payroll()

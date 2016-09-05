@@ -449,17 +449,12 @@ the channel (or whatever replyto is) know. */
 func betFinished(replyto string, betID byte) {
 	Privmsg(replyto, "Betting has closed for %v", betID)
 	log.Printf("[BET] Betting finished for %v", betID)
-	panic("implement this")
 }
 
 /* eventFinished is called when betting is closed for the bet betID.  It will
 let the channel (or whatever replyto is) know. */
 func eventFinished(replyto string, betID byte) {
 	Privmsg(replyto, "Bet %v has come due.  Did it happen?", betID)
-	log.Printf("[BET] Event finished for %v", betID)
-	/* TODO: implement yes/no for events */
-	/* TODO: Let ops say whether events happened */
-	panic("implement this")
 }
 
 /* resetNextEventTimer reset's the target nick's bet-placing timer */
@@ -512,13 +507,20 @@ func listEvents(nick, replyto string) {
 		}
 		return nil
 	})
-	go func() {
-		Privmsg(replyto, nick+": Current events...")
-		for _, e := range eventListings {
-			Privmsg(replyto, e)
-		}
-		log.Printf("[BET] Listed events for %v in %v", nick, replyto)
-	}()
+	if 0 == len(eventListings) {
+		Privmsg(replyto, nick+": No events!  It's up to you now.")
+		log.Printf(
+			"[BET] Informed %v (%v) there are no events",
+			nick,
+			replyto,
+		)
+		return
+	}
+	Privmsg(replyto, nick+": Current events...")
+	for _, e := range eventListings {
+		Privmsg(replyto, e)
+	}
+	log.Printf("[BET] Listed events for %v in %v", nick, replyto)
 }
 
 /* getEventListingFromBucket gets a one-liner event listing from the event
@@ -778,8 +780,17 @@ func noteHappened(nick, replyto, args string) {
 		totwon += b
 	}
 
+	/* Pot is the total amount bet by everybody */
+	pot := totwon + totlost
+
+	/* If nobody won, easy day */
+	if 0 == totwon {
+		Privmsg(replyto, "Nobody won %v.", bid)
+		return
+	}
+
 	/* Each winning bet credit gets this many losing bet credits */
-	payout := float64((totwon + totlost) / totlost)
+	payout := float64(pot) / float64(totwon)
 
 	/* Adjust winners' money */
 	paid := map[string]int64{}
@@ -797,7 +808,8 @@ func noteHappened(nick, replyto, args string) {
 	})
 
 	/* Note who won */
-	winners := fmt.Sprintf("%v concluded.  Winners:", bid)
+	/* TODO: Make more fun */
+	winners := fmt.Sprintf("Result for %v: %v.  Winners:", bid, parts[0])
 	for k, v := range now {
 		winners += fmt.Sprintf(" %v (%v)", k, v)
 	}
