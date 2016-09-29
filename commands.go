@@ -17,12 +17,22 @@ const IGN = "magisterquis"
 
 /* Commands which return simple information */
 var simpleCommands = map[string]string{
-	"ign": fmt.Sprintf("His IGN is %v", IGN),
+	"ign":    fmt.Sprintf("His IGN is %v", IGN),
+	"roblox": fmt.Sprintf("His Roblox username is %v", IGN),
+	"mumble": fmt.Sprintf(
+		"Click " +
+			"mumble://magisterquis.com:64738/twitchers?" +
+			"title=MagisterQuis%%27%%20Server&" +
+			"url=magisterquis.com " +
+			"or drag-and-drop the URL into Mumble",
+	),
 }
 
 var commandFunctions = map[string]func(nick, replyto, args string) error{
 	"bet":     PlaceBet,
 	"balance": CheckBalance,
+	"yes":     noteYes,
+	"no":      noteNo,
 	/* TODO: !sh */
 }
 
