@@ -7,7 +7,7 @@ import "log"
  * Handle JOIN messages
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160826
+ * Last Modified 20160927
  */
 
 /* HailList is a list of users to hail on JOIN */
@@ -35,9 +35,12 @@ func HandleJoin(nick, op, channel string) error {
 	/* Welcome the user */
 	go WelcomeUser(nick, channel)
 
-	/* Hail users */
+	/* Hail special users */
 	if _, ok := hails[nick]; ok {
 		go Privmsg(channel, "All hail "+nick+"!")
+	} else {
+		/* Otherwise just say hello */
+		go Privmsg(channel, "Hello "+nick+".")
 	}
 
 	log.Printf("[JOIN] %v in %v", nick, channel)
