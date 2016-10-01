@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -45,6 +46,7 @@ var betTimers = [256]struct {
 	bet   *time.Timer /* Betting's over */
 	event *time.Timer /* The event's done */
 }{}
+var btlock = &sync.Mutex{}
 
 /* PlaceBet allows a user to place a bet */
 func PlaceBet(nick, replyto, args string) error {
@@ -75,12 +77,9 @@ func PlaceBet(nick, replyto, args string) error {
 	} else if strings.HasPrefix(args, "resettimer") {
 		/* Reset someone's bet timer */
 		go resetNextEventTimer(nick, replyto, args[10:])
-	} else if strings.HasPrefix(args, "killbet") {
+	} else if strings.HasPrefix(args, "kill") {
 		/* Remove a bet from the list */
 		go killBet(nick, replyto, args[7:])
-	} else if strings.HasPrefix(args, "yes") ||
-		strings.HasPrefix(args, "no") {
-		go noteHappened(nick, replyto, args)
 	} else {
 		go Privmsg(replyto, fmt.Sprintf(
 			"%v: I don't understand that.  Please try !bet help.",
@@ -100,7 +99,7 @@ func sendBetOpHelp(nick, replyto string) {
 	Privmsg(replyto, "%v: Op !bet help:", nick)
 	for _, h := range []string{
 		"resettimer <nick>",
-		"killbet <id>",
+		"kill <id>",
 		"yes|no <id>",
 	} {
 		Privmsg(replyto, fmt.Sprintf("!bet %v", h))
@@ -138,9 +137,6 @@ func sendBetHelp(nick, replyto string) {
 	lastHelp = time.Now()
 }
 
-/* TODO: a way to cancel events */
-/* TODO: a way to list events */
-
 /* parseBetAmount parses the bet as a string, ensures it's over 0, and returns
 the value. */
 func parseBetAmount(bet string) (int64, error) {
@@ -160,7 +156,7 @@ nick of value bet will be placed. */
 func addEvent(nick, replyto, bet, event, duration string) {
 	/* TODO: Chop function up a bit */
 	var (
-		betID    byte /* Bet ID */
+		betID    byte = 1 /* Bet ID */
 		eventEnd time.Time
 		betEnd   time.Time
 		now      time.Time
@@ -294,13 +290,15 @@ func addEvent(nick, replyto, bet, event, duration string) {
 	to ask whether the event happened */
 	go Privmsg( /* TODO: Make nicer */
 		replyto,
-		"Bet's in!  You have %v to place your bets for event %v: %v",
+		"Calling all bets!  You have %v to place your bets for "+
+			"event %v: %v",
 		roundToSeconds(betEnd.Sub(time.Now())),
 		betID,
 		event,
 	)
 	/* Start timers to notify the channel that the betting and event are
 	over */
+	btlock.Lock()
 	betTimers[betID].bet = time.AfterFunc(
 		betEnd.Sub(now),
 		func() {
@@ -313,6 +311,8 @@ func addEvent(nick, replyto, bet, event, duration string) {
 			eventFinished(replyto, betID)
 		},
 	)
+	btlock.Unlock()
+
 	log.Printf(
 		"[BET] %v (%v) by %v in %v BetEnd:%v EventEnd:%v",
 		event,
@@ -386,7 +386,7 @@ func makeBet(nick, replyto, bet, way, id string) {
 		/* Lower-case the way */
 		way = strings.ToLower(way)
 		/* Bet ID as a byte */
-		bint, err := strconv.ParseUint(bet, 0, 8)
+		bint, err := strconv.ParseUint(id, 0, 8)
 		if nil != err {
 			return err
 		}
@@ -454,7 +454,8 @@ func betFinished(replyto string, betID byte) {
 /* eventFinished is called when betting is closed for the bet betID.  It will
 let the channel (or whatever replyto is) know. */
 func eventFinished(replyto string, betID byte) {
-	Privmsg(replyto, "Bet %v has come due.  Did it happen?", betID)
+	Privmsg(replyto, "Event %v has come due.  Did it happen?", betID)
+	log.Printf("[BET] Event %v finished", betID)
 }
 
 /* resetNextEventTimer reset's the target nick's bet-placing timer */
@@ -468,7 +469,6 @@ func resetNextEventTimer(nick, replyto, targetList string) {
 			if "" == n {
 				continue
 			}
-			/* TODO: Fix timing code */
 			SetNextEventAllowedTx(tx, n, time.Time{})
 			log.Printf(
 				"[BET] Reset next event allowed time for %v",
@@ -487,7 +487,8 @@ func resetNextEventTimer(nick, replyto, targetList string) {
 
 /* listEvents lists the bettable events */
 func listEvents(nick, replyto string) {
-	eventListings := make([]string, 0)
+	//eventListings := make([]string, 0)
+	var eventListings []string
 
 	DB.Update(func(tx *bolt.Tx) error {
 		now := time.Now()
@@ -525,7 +526,11 @@ func listEvents(nick, replyto string) {
 
 /* getEventListingFromBucket gets a one-liner event listing from the event
 stored in the bucket b */
-func getEventListingFromBucket(bid byte, b *bolt.Bucket, now time.Time) string {
+func getEventListingFromBucket(
+	bid byte,
+	b *bolt.Bucket,
+	now time.Time,
+) string {
 	var (
 		lastbet      time.Duration
 		eventend     time.Duration
@@ -536,7 +541,7 @@ func getEventListingFromBucket(bid byte, b *bolt.Bucket, now time.Time) string {
 	if nil != err {
 		panic(err.Error())
 	}
-	if t.Before(now) {
+	if t.After(now) {
 		lastbet = t.Sub(now)
 	}
 	/* Get the time until event ends */
@@ -544,7 +549,7 @@ func getEventListingFromBucket(bid byte, b *bolt.Bucket, now time.Time) string {
 	if nil != err {
 		panic(err.Error())
 	}
-	if t.Before(now) {
+	if t.After(now) {
 		eventend = t.Sub(now)
 	}
 	/* Get event */
@@ -621,37 +626,32 @@ func killBet(nick, replyto, args string) {
 
 	/* Get bet numbers to kill */
 	ns := strings.Split(args, " ")
-	DB.Update(func(tx *bolt.Tx) error {
-		/* Get the bucket for the bets */
-		b := GetBucket(tx, sb("bets"))
-		/* Kill each bet by ID */
-		for _, n := range ns {
-			if "" == n {
-				continue
-			}
-			/* Convert each number to a byte */
-			bint, err := strconv.ParseUint(n, 0, 8)
-			if nil != err {
-				go Privmsg(
-					replyto,
-					"%v: Could not parse %q: %v",
-					nick,
-					n,
-					err,
-				)
-				continue
-			}
-			bid := byte(bint)
+	/* Kill each bet by ID */
+	for _, n := range ns {
+		if "" == n {
+			continue
+		}
+		/* Convert each number to a byte */
+		bint, err := strconv.ParseUint(n, 0, 8)
+		if nil != err {
+			go Privmsg(
+				replyto,
+				"%v: Could not parse %q: %v",
+				nick,
+				n,
+				err,
+			)
+			continue
+		}
+		/* Remove the bet's bucket */
+		bid := byte(bint)
+		DB.Update(func(tx *bolt.Tx) error {
+			/* Get the bucket for the bets */
+			b := GetBucket(tx, sb("bets"))
 			/* Remove it */
 			if err := b.DeleteBucket([]byte{bid}); nil != err {
-				/* Replace bolt message with friendlier error
-				message */
-				if bolt.ErrBucketNotFound == err {
-					err = fmt.Errorf(
-						/*TODO: Make less ugly */
-						"does not exist",
-					)
-				}
+				/* TODO: Replace bolt message with friendlier
+				error message */
 				go Privmsg(
 					replyto,
 					"%v: Unable to kill %v: %v",
@@ -659,79 +659,81 @@ func killBet(nick, replyto, args string) {
 					bid,
 					err,
 				)
-				continue
+				log.Printf(
+					"[BET] Unable to remove bet bucket "+
+						"%v: %v",
+					bid,
+					err,
+				)
 			}
-			go Privmsg(replyto, "%v: Killed event %v", nick, bid)
-			log.Printf(
-				"[BET] Killed event %v as per %v in %v",
-				bid,
-				nick,
-				replyto,
-			)
-		}
-		return nil
-	})
+			return nil
+		})
+		/* Cancel the bet's timers */
+		cancelBetTimers(bid)
+		go Privmsg(replyto, "%v: Killed event %v", nick, bid)
+		log.Printf(
+			"[BET] Killed event %v as per %v in %v",
+			bid,
+			nick,
+			replyto,
+		)
+	}
+}
+
+/* noteYes marks the betID event contained in args as having happened */
+func noteYes(nick, replyto, args string) error {
+	go noteHappened(nick, replyto, args, true)
+	return nil
+}
+
+/* noteNo marks the betID event contained in args as not having happened */
+func noteNo(nick, replyto, args string) error {
+	go noteHappened(nick, replyto, args, false)
+	return nil
 }
 
 /* noteHappened marks the betID contained in args (after "yes " or "no ") as
 having been completed or not.  Syntax is "yes|no <betID>". */
-func noteHappened(nick, replyto, args string) {
+func noteHappened(nick, replyto, id string, happened bool) {
 	/* ChanOps only */
 	if WarnIfNotChanOp(nick, replyto) {
-		return
-	}
-
-	/* Split into parts */
-	parts := strings.SplitN(args, " ", 2)
-	if 1 > len(parts) {
-		panic(args)
-	}
-	if 2 != len(parts) {
-		Privmsg(
-			replyto,
-			"%v: I don't understand.  Maybe try !bet ophelp?",
-			nick,
-		)
-		return
-	}
-
-	/* Get the action */
-	var happened bool
-	switch parts[0] {
-	case "yes":
-		happened = true
-	case "no":
-		happened = false
-	default:
-		/* TODO: Less bad message */
-		Privmsg(
-			replyto,
-			"%v: %q doesn't make sense as a yes or no.",
-			nick,
-			parts[0],
-		)
+		/* TODO: Yes/no in errorf */
 		return
 	}
 
 	/* Get the bet ID */
-	bint, err := strconv.ParseUint(parts[1], 0, 8)
+	bint, err := strconv.ParseUint(id, 0, 8)
 	if nil != err {
 		Privmsg(
 			replyto,
-			"%v: ID %q not understood",
+			"%v: Bet ID %q not understood",
 			nick,
-			parts[1],
+			id,
 		)
+		return
 	}
 	bid := byte(bint)
+
+	/* Kill the bet's timers */
+	cancelBetTimers(bid)
 
 	var (
 		totlost    int64
 		bettorsRaw = map[string][]byte{}
+		evtext     string /* Event text */
 	)
-	DB.Update(func(tx *bolt.Tx) error {
-		/* Bet bucket */
-		b := GetBucket(tx, sb("bets"), []byte{bid})
+	derr := DB.Update(func(tx *bolt.Tx) error {
+		/* Bets bucket */
+		bb := GetBucket(tx, sb("bets"))
+		/* Make sure we have this bet */
+		b := bb.Bucket([]byte{bid})
+		if nil == b {
+			return fmt.Errorf("Bet %v doesn't exist", bid)
+		}
+
+		/* Get the event's text */
+		evtext = fmt.Sprintf("%s", b.Get(sb("event")))
+
 		/* Figure out who won and lost */
 		var win, lose *bolt.Bucket
 		bf := b.Bucket(sb("for"))
@@ -756,15 +758,24 @@ func noteHappened(nick, replyto, args string) {
 				return nil
 			})
 		}
-		/* Delete bet bucket */
-		bb := GetBucket(tx, sb("bets"))
 		if err := bb.DeleteBucket([]byte{bid}); nil != err {
 			panic(err.Error())
 		}
 
 		return nil
 	})
-	log.Printf("[BET] %v noted %v as %q", nick, bid, parts[0])
+	if nil != derr {
+		Privmsg(
+			replyto,
+			"%v: Error noting %v as %v: %v",
+			nick,
+			bid,
+			happened,
+			derr,
+		)
+		return
+	}
+	log.Printf("[BET] %v noted %v as %v", nick, bid, happened)
 
 	/* Un-varint the winning bets */
 	var (
@@ -785,7 +796,7 @@ func noteHappened(nick, replyto, args string) {
 
 	/* If nobody won, easy day */
 	if 0 == totwon {
-		Privmsg(replyto, "Nobody won %v.", bid)
+		Privmsg(replyto, "Nobody won %v (%v).", bid, evtext)
 		return
 	}
 
@@ -808,10 +819,31 @@ func noteHappened(nick, replyto, args string) {
 	})
 
 	/* Note who won */
-	/* TODO: Make more fun */
-	winners := fmt.Sprintf("Result for %v: %v.  Winners:", bid, parts[0])
+	winners := fmt.Sprintf("Event %v (%v) ", bid, evtext)
+	if happened {
+		winners += "happened!"
+	} else {
+		winners += "didn't happen!"
+	}
+	winners += "  Winners:"
 	for k, v := range now {
 		winners += fmt.Sprintf(" %v (%v)", k, v)
 	}
 	Privmsg(replyto, "%v", winners)
+
+	return
+}
+
+/* cancelBetTimers cancels the timers associated with the given betID */
+func cancelBetTimers(betID byte) {
+	btlock.Lock()
+	defer btlock.Unlock()
+	if nil != betTimers[betID].bet {
+		betTimers[betID].bet.Stop()
+		betTimers[betID].bet = nil
+	}
+	if nil != betTimers[betID].event {
+		betTimers[betID].event.Stop()
+		betTimers[betID].event = nil
+	}
 }

@@ -169,10 +169,9 @@ func CheckBalance(nick, replyto, args string) error {
 	b := GetAccountBalance(tgt)
 	go Privmsg(
 		replyto,
-		"%v: %v balance is %v%v",
+		"%v: %v balance is %v",
 		nick,
 		whose,
-		CURRENCYUNITS,
 		b,
 	)
 	return nil

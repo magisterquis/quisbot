@@ -33,6 +33,7 @@ var commandFunctions = map[string]func(nick, replyto, args string) error{
 	"balance": CheckBalance,
 	"yes":     noteYes,
 	"no":      noteNo,
+	"timeout": TimeoutViewer,
 	/* TODO: !sh */
 }
 

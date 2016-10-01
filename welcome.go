@@ -40,5 +40,3 @@ func WelcomeUser(nick, channel string) {
 	log.Printf("[WELCOME] %v (%v)", nick, channel)
 	return
 }
-
-/* TODO: Put in appropriate places */

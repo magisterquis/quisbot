@@ -12,10 +12,14 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/boltdb/bolt"
 )
+
+// DEFTOTIME is the default timeout time for !timeout
+const DEFTOTIME = "1m"
 
 /* LogFirstLast logs the first and latest time a user did the given action in
 the given channel.  what is an op-specific field which can be anything. */
@@ -180,4 +184,48 @@ func WarnIfNotChanOp(nick, ch string) bool {
 		return true
 	}
 	return false
+}
+
+/* TimeoutViewer asks twitch to send the viewer to timeout for a bit */
+func TimeoutViewer(nick, replyto, args string) error {
+	/* Need the viewer to be an op to send people to timeout */
+	if WarnIfNotChanOp(nick, replyto) {
+		return nil
+	}
+	/* Parse out the nick and time */
+	parts := strings.Fields(args)
+	n := len(parts)
+	/* Default timeout time */
+	if 1 == n {
+		parts = append(parts, DEFTOTIME) /* TODO: Unhardcode */
+	}
+	if 2 != len(parts) {
+		go Privmsg(
+			replyto,
+			"%v: Usage: timeout <nick> <duration>",
+			nick,
+		)
+		return nil
+	}
+	/* Parse the duration to ban user */
+	d, err := time.ParseDuration(parts[1])
+	if nil != err {
+		go Privmsg(
+			replyto,
+			"%v: Error parsing duration: %v",
+			nick,
+			err,
+		)
+		return nil
+	}
+	/* Send timeout message */
+	s := int(d.Seconds())
+	go Privmsg(
+		replyto,
+		"/timeout %v %v",
+		parts[0],
+		s,
+	)
+	log.Printf("[TIMEOUT] %v will be quiet for %v", parts[0], s)
+	return nil
 }
