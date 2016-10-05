@@ -5,7 +5,7 @@ package main
  * DB routines handling viewers
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160831
+ * Last Modified 20161004
  */
 
 import (
@@ -228,4 +228,15 @@ func TimeoutViewer(nick, replyto, args string) error {
 	)
 	log.Printf("[TIMEOUT] %v will be quiet for %v", parts[0], s)
 	return nil
+}
+
+/* GetIGN returns the IGN for the given nick, or an empty string if there is no
+IGN for the nick. */
+func GetIGN(nick string) string {
+	return bs(Get(sb("ign"), sb("viewers"), sb(nick)))
+}
+
+/* SetIGN sets the IGN for the given nick */
+func SetIGN(nick, ign string) {
+	Put(sb("ign"), sb(ign), sb("viewers"), sb(nick))
 }

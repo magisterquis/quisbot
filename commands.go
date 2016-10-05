@@ -5,7 +5,7 @@ package main
  * User-facing commands
  * By MagisterQuis
  * Created 20160821
- * Last Modified 20160904
+ * Last Modified 20161004
  */
 
 import (
@@ -13,11 +13,8 @@ import (
 	"strings"
 )
 
-const IGN = "magisterquis"
-
 /* Commands which return simple information */
 var simpleCommands = map[string]string{
-	"ign":    fmt.Sprintf("His IGN is %v", IGN),
 	"roblox": fmt.Sprintf("His Roblox username is %v", IGN),
 	"mumble": fmt.Sprintf(
 		"Click " +
@@ -34,6 +31,7 @@ var commandFunctions = map[string]func(nick, replyto, args string) error{
 	"yes":     noteYes,
 	"no":      noteNo,
 	"timeout": TimeoutViewer,
+	"ign":     IGNCommand,
 	/* TODO: !sh */
 }
 
@@ -65,3 +63,5 @@ func HandleCommand(msg, nick, replyto string) error {
 
 	return nil
 }
+
+/* TODO: Document IGN commands in help */
