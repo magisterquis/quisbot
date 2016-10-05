@@ -16,13 +16,12 @@ import (
 /* Commands which return simple information */
 var simpleCommands = map[string]string{
 	"roblox": fmt.Sprintf("His Roblox username is %v", IGN),
-	"mumble": fmt.Sprintf(
-		"Click " +
-			"mumble://magisterquis.com:64738/twitchers?" +
-			"title=MagisterQuis%%27%%20Server&" +
-			"url=magisterquis.com " +
-			"or drag-and-drop the URL into Mumble",
-	),
+	"mumble": "Click " +
+		"mumble://magisterquis.com:64738/twitchers?" +
+		"title=MagisterQuis%%27%%20Server&" +
+		"url=magisterquis.com " +
+		"or drag-and-drop the URL into Mumble",
+	"sr": "Try !songrequest",
 }
 
 var commandFunctions = map[string]func(nick, replyto, args string) error{
@@ -63,5 +62,3 @@ func HandleCommand(msg, nick, replyto string) error {
 
 	return nil
 }
-
-/* TODO: Document IGN commands in help */
