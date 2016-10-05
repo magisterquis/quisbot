@@ -28,6 +28,15 @@ func IGNCommand(nick, replyto, args string) error {
 
 	/* Get the IGN for a user */
 	if 1 == len(parts) {
+		/* Hopefully nobody's named "help" */
+		if "help" == parts[0] {
+			h := "%v: !ign [nick]"
+			if IsChanOp(nick, replyto) {
+				h = "%v: !ign [nick [ign]]"
+			}
+			go Privmsg(replyto, h, nick)
+			return nil
+		}
 		ign := GetIGN(parts[0])
 		/* Don't have one */
 		if "" == ign {
