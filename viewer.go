@@ -220,13 +220,21 @@ func TimeoutViewer(nick, replyto, args string) error {
 	}
 	/* Send timeout message */
 	s := int(d.Seconds())
+	d = time.Duration(s) * time.Second
+	go Privmsg(
+		replyto,
+		"%v: Asked for a %v timeout for %v",
+		nick,
+		d,
+		parts[0],
+	)
 	go Privmsg(
 		replyto,
 		"/timeout %v %v",
 		parts[0],
 		s,
 	)
-	log.Printf("[TIMEOUT] %v will be quiet for %v", parts[0], s)
+	log.Printf("[TIMEOUT] %v will be quiet for %v", parts[0], d)
 	return nil
 }
 
