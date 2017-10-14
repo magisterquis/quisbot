@@ -1,72 +1,58 @@
+// quisbot is a small IRC bot which welcomes users
 package main
 
 /*
  * quisbot.go
- * Twitch IRC bot
+ * Second try at a friendly IRC bot
  * By MagisterQuis
- * Created 20160820
- * Last Modified 20160904
+ * Created 20170625
+ * Last Modified 20170625
  */
 
 import (
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
-	"net"
 	"os"
+	"sync"
 	"time"
-
-	"github.com/boltdb/bolt"
 )
-
-/* Interval before reconnecting */
-const RECONINT = 30 * time.Second
-
-var (
-	ServerConnection net.Conn /* Connection to server */
-	DB               *bolt.DB
-)
-
-/* BOTS is the list of bots, i.e. nicks which shouldn't get things */
-var BOTS = map[string]struct{}{
-	"quisbot": struct{}{},
-	"moobot":  struct{}{},
-}
 
 func main() {
 	var (
-		user = flag.String(
-			"u",
+		nick = flag.String(
+			"nick",
 			"quisbot",
-			"Twitch `username`",
+			"IRC `nickname`",
+		)
+		configFile = flag.String(
+			"conf",
+			"quisbot.conf",
+			"Config `file`",
 		)
 		tokenFile = flag.String(
-			"t",
-			"./token",
-			"Name of `file` from which to read oauth token",
+			"token",
+			"quisbot.token",
+			"OAuth token `file`",
 		)
-		channel = flag.String(
-			"c",
-			"magisterquis",
-			"Twitch `channel` to join",
+		pollInterval = flag.Duration(
+			"poll",
+			time.Second,
+			"Configuration change poll `interval`",
 		)
-		logFile = flag.String(
-			"l",
-			"quisbot.log",
-			"Name of `logfile`",
-		)
-		dbFile = flag.String(
-			"db",
-			"./quisbot.db",
-			"Database `file`",
+		addr = flag.String(
+			"addr",
+			"irc.chat.twitch.tv:6667",
+			"IRC server `address`",
 		)
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(
 			os.Stderr,
 			`Usage: %v [options]
+
+Sits in channels and welcomes people.  Polls the config file for changes.
 
 Options:
 `,
@@ -76,24 +62,8 @@ Options:
 	}
 	flag.Parse()
 
-	/* Log to a file and stderr */
-	lf, err := os.OpenFile(
-		*logFile,
-		os.O_CREATE|os.O_APPEND|os.O_WRONLY,
-		0644,
-	)
-	if nil != err {
-		log.Fatalf("Unable to open logfile %v: %v", *logFile, err)
-	}
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-	log.SetOutput(io.MultiWriter(os.Stdout, lf))
-
-	/* Open the database */
-	DB, err = bolt.Open(*dbFile, 0600, nil)
-	if nil != err {
-		log.Fatalf("Unable to open database %v: %v", *dbFile, err)
-	}
-	log.Printf("Opened database in %v", DB.Path())
+	log.SetOutput(os.Stdout)
 
 	/* Read in token file */
 	token, err := ioutil.ReadFile(*tokenFile)
@@ -102,40 +72,22 @@ Options:
 	}
 	log.Printf("Read token from %v", *tokenFile)
 
-	/* Trap Ctrl+C, etc, to close DB */
-	CatchInt()
+	/* Try to connect to the server */
+	c, err := Connect(*addr)
+	if nil != err {
+		log.Fatalf("Unable to connect to %v: %v", *addr, err)
+	}
+	log.Printf("Connected to %v", c.RemoteAddr())
 
-	/* Start payroll watcher */
-	go Payroll()
+	/* Read config */
+	ready := &sync.WaitGroup{}
+	ready.Add(1)
+	go startConfigPoll(*configFile, *pollInterval, ready, c)
 
-	/* Maintain a connection to twitch */
+	/* Connect to server, greet users.  Random disconnects happen. */
 	for {
-		/* Make a network connection */
-		ServerConnection, err = net.Dial(
-			"tcp",
-			"irc.chat.twitch.tv:6667",
-		)
-		if nil != err {
-			log.Printf("Unable to connect to twitch: %v", err)
-			goto SLEEP
+		if err := doIRC(c, *nick, token, ready); nil != err {
+			log.Printf("IRC Error: %v", err)
 		}
-		log.Printf("Connected to %v", ServerConnection.RemoteAddr())
-		/* Register */
-		if err = Register(
-			ServerConnection,
-			*user,
-			token,
-			*channel,
-		); nil != err {
-			log.Printf("Unable to register: %v", err)
-			goto SLEEP
-		}
-		if err = HandleRX(); nil != err {
-			log.Printf("RX error: %v", err)
-			goto SLEEP
-		}
-	SLEEP:
-		time.Sleep(RECONINT)
-
 	}
 }

@@ -26,8 +26,4 @@ _testmain.go
 quisbot
 quisbot.exe
 .*.swp
-quisbot.log.txt
-quisbot.db
-token
-nohup.out
-quisbot.log
+quisbot.token
